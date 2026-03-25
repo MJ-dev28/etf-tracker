@@ -16,7 +16,7 @@ export default function ETFInput() {
     setLoading(true);
     try {
       const data = await getETFPrice(symbol.toUpperCase());
-      addQuote(data); // 가져온 데이터를 스토어(기억장치)에 저장!
+      addQuote(data as any); // 가져온 데이터를 스토어(기억장치)에 저장!
       setSymbol('');  // 입력창 비우기
     } catch (error) {
       alert('종목 코드를 확인해 주세요! (예: QQQ, TSLA)');
