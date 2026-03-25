@@ -5,4 +5,4 @@ pages_build_output_dir = ".vercel/output"
 
 [vars]
 NEXT_PUBLIC_SUPABASE_URL = "https://crkutzsbbduextwdsnnm.supabase.co"
-NEXT_PUBLIC_SUPABASE_ANON_KEY = "sb_publishable_8TsvrfnxGjjASVVzojQycA_sSuKtamt"
+NEXT_PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNya3V0enNiYmR1ZXh0d2Rzbm5tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM5ODA4MjAsImV4cCI6MjA4OTU1NjgyMH0.uOJllNP6HRavTeUCxCbXfSzWrARqkbLsULnV-dZ_ah8"
