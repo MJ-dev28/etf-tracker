@@ -1,84 +1,134 @@
-'use client'
-import { useState, useEffect } from 'react'
-import { createClient } from '@supabase/supabase-js'
+'use client';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+import { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabase'; // 아까 만든 공통 설정 파일
+import { useETFStore } from '@/lib/store/useETFStore'; // Zustand 스토어
 
 export default function Home() {
-  const [symbol, setSymbol] = useState('')
-  const [assets, setAssets] = useState<any[]>([])
-  const [loading, setLoading] = useState(false)
+  const [inputSymbol, setInputSymbol] = useState('');
+  
+  // Zustand에서 상태와 액션을 가져옵니다.
+  const { quotes, fetchQuote, isLoading, error: apiError } = useETFStore();
 
-  const fetchAssets = async () => {
-    setLoading(true)
-    const { data } = await supabase.from('user_assets').select('*')
-    if (data) {
-      const assetsWithPrice = await Promise.all(
-        data.map(async (asset) => {
-          try {
-            const res = await fetch(`/api/price?symbol=${asset.symbol}`)
-            const json = await res.json()
-            return { ...asset, price: json.price || 'N/A' }
-          } catch {
-            return { ...asset, price: 'N/A' }
-          }
-        })
-      )
-      setAssets(assetsWithPrice)
+  // 초기 데이터를 불러오는 함수
+  const loadPortfolio = async () => {
+    // 1. Supabase에서 저장된 종목 목록만 가져옵니다.
+    const { data, error: sbError } = await supabase
+      .from('user_assets')
+      .select('symbol');
+    
+    if (sbError) {
+      console.error('Supabase 에러:', sbError.message);
+      return;
     }
-    setLoading(false)
-  }
 
-  useEffect(() => { fetchAssets() }, [])
+    if (data && data.length > 0) {
+      // 2. 각 종목의 실시간 가격을 API를 통해 순차적으로 업데이트합니다.
+      for (const item of data) {
+        await fetchQuote(item.symbol);
+      }
+    }
+  };
 
-  const addAsset = async () => {
-    if (!symbol) return
-    await supabase.from('user_assets').insert([{ symbol: symbol.toUpperCase() }])
-    setSymbol('')
-    fetchAssets()
-  }
+  useEffect(() => {
+    loadPortfolio();
+  }, []);
+
+  const handleAddAsset = async () => {
+    if (!inputSymbol) return;
+    const upperSymbol = inputSymbol.toUpperCase();
+    
+    // DB 저장 로직 (중복 체크는 Supabase RLS나 Unique 제약조건에 맡깁니다)
+    const { error: insertError } = await supabase
+      .from('user_assets')
+      .insert([{ symbol: upperSymbol }]);
+
+    if (insertError) {
+      alert('이미 등록되었거나 저장 중 오류가 발생했습니다.');
+    } else {
+      // 성공 시 실시간 가격 조회 및 목록 반영
+      await fetchQuote(upperSymbol);
+      setInputSymbol('');
+    }
+  };
 
   return (
-    <div style={{ backgroundColor: '#f9fafb', minHeight: '100vh', padding: '40px 20px' }}>
-      <div style={{ maxWidth: '480px', margin: '0 auto', backgroundColor: '#ffffff', borderRadius: '16px', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', padding: '30px' }}>
-        <h1 style={{ fontSize: '24px', fontWeight: '800', color: '#111827', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          📊 My ETF Tracker
-        </h1>
-        <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '24px' }}>실시간으로 자산 가치를 확인하세요</p>
-        
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '32px' }}>
-          <input 
-            value={symbol} 
-            onChange={(e) => setSymbol(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && addAsset()}
-            placeholder="종목 코드 (예: QQQ)"
-            style={{ flex: 1, padding: '12px 16px', borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '16px', outline: 'none' }}
+    <main className="min-h-screen bg-gray-50 py-10 px-4 font-sans">
+      <div className="max-w-md mx-auto bg-white rounded-2xl shadow-md p-8 border border-gray-100">
+        {/* 헤더 섹션 */}
+        <div className="mb-8 text-center">
+          <h1 className="text-2xl font-black text-gray-900 tracking-tight">
+            📊 ETF TRACKER
+          </h1>
+          <p className="text-sm text-gray-500 mt-1 font-medium">실시간 자산 가치 확인</p>
+        </div>
+
+        {/* 입력창 (Standard HTML + Tailwind) */}
+        <div className="flex gap-2 mb-8">
+          <input
+            type="text"
+            value={inputSymbol}
+            onChange={(e) => setInputSymbol(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleAddAsset()}
+            placeholder="예: QQQ, SPY"
+            className="flex-1 px-4 py-3 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all text-sm"
           />
-          <button onClick={addAsset} style={{ backgroundColor: '#2563eb', color: 'white', padding: '12px 20px', borderRadius: '8px', border: 'none', fontWeight: '600', cursor: 'pointer' }}>
-            추가
+          <button 
+            onClick={handleAddAsset}
+            disabled={isLoading}
+            className="px-6 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 disabled:bg-gray-300 transition-colors text-sm"
+          >
+            {isLoading ? '...' : '추가'}
           </button>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-          <h3 style={{ fontSize: '18px', fontWeight: '700', color: '#374151' }}>포트폴리오</h3>
-          <button onClick={fetchAssets} style={{ background: 'none', border: 'none', color: '#2563eb', cursor: 'pointer', fontSize: '13px' }}>새로고침</button>
-        </div>
+        {/* 리스트 섹션 */}
+        <div className="space-y-4">
+          <div className="flex justify-between items-center border-b pb-2">
+            <h3 className="font-bold text-gray-800 text-sm">보유 종목</h3>
+            <button 
+              onClick={loadPortfolio}
+              className="text-xs font-semibold text-blue-600 hover:text-blue-800"
+            >
+              새로고침
+            </button>
+          </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {assets.map((asset) => (
-            <div key={asset.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', backgroundColor: '#f3f4f6', borderRadius: '12px' }}>
-              <span style={{ fontWeight: '600', fontSize: '16px', color: '#111827' }}>{asset.symbol}</span>
-              <span style={{ fontWeight: '700', fontSize: '16px', color: asset.price === 'N/A' ? '#9ca3af' : '#059669' }}>
-                {typeof asset.price === 'number' ? `$${asset.price.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : asset.price}
-              </span>
+          {/* 에러 발생 시 알림 */}
+          {apiError && (
+            <div className="p-3 bg-red-50 text-red-600 text-xs rounded-lg font-medium">
+              ⚠️ {apiError}
             </div>
-          ))}
-          {assets.length === 0 && !loading && <p style={{ textAlign: 'center', color: '#9ca3af', padding: '20px' }}>아직 등록된 종목이 없습니다.</p>}
+          )}
+
+          {/* 데이터 리스트 */}
+          <div className="grid gap-3">
+            {quotes.map((item) => (
+              <div 
+                key={item.symbol} 
+                className="flex justify-between items-center p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors border border-transparent hover:border-gray-200"
+              >
+                <div>
+                  <div className="font-bold text-gray-900">{item.symbol}</div>
+                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">{item.currency}</div>
+                </div>
+                <div className="text-right">
+                  <div className="font-black text-lg text-emerald-600">
+                    ${typeof item.price === 'number' ? item.price.toLocaleString(undefined, { minimumFractionDigits: 2 }) : 'N/A'}
+                  </div>
+                </div>
+              </div>
+            ))}
+            
+            {/* 데이터가 없을 때 */}
+            {quotes.length === 0 && !isLoading && (
+              <div className="text-center py-12">
+                <p className="text-gray-400 text-sm">등록된 종목이 없습니다.</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
-    </div>
-  )
+    </main>
+  );
 }
